@@ -1,5 +1,11 @@
 import * as esbuild from 'esbuild-wasm';
 import axios from 'axios'; 
+import localforage from 'localforage';
+
+const fileCache = localforage.createInstance({
+  name:'filecache'
+});
+
 
 
 export const unpkgPathPlugin = () => {
@@ -35,21 +41,35 @@ export const unpkgPathPlugin = () => {
           return {
             loader: 'jsx',
             contents: `
-              const message = require('nested-test-pkg');
-              console.log(message);
+              import React, {useState} from 'react';
+              console.log(React, useState);
             `,
           };
         } 
         
+        // Check to see is file is already fetched
+        // and if it is in the cache
+        const cachedResult = await fileCache.getItem<esbuild.OnLoadResult>(args.path);
+
+        // if it is, return it immediately
+        if(cachedResult){
+          return cachedResult;
+        }
 
         const { data,request } = await axios.get(args.path);
-        console.log(request);
-        return {
+        
+        const result: esbuild.OnLoadResult = {
           loader: 'jsx',
           contents: data,
           resolveDir: new URL('./', request.responseURL).pathname,
         };
+        // store response in cache
+        await fileCache.setItem(args.path, result);
+
+        return result;
       });
+
+
     },
   };
 };
